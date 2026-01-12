@@ -8,19 +8,6 @@ Aplikasi CRUD User management dengan **Clean Architecture**, **Domain-Driven Des
 
 ---
 
-## 📋 Daftar Isi
-
-1. [Fitur-Fitur](#-fitur-fitur)
-2. [Prasyarat](#-prasyarat)
-3. [Instalasi dari Awal](#-instalasi-dari-awal)
-4. [Cara Menjalankan](#-cara-menjalankan)
-5. [API Endpoints](#-api-endpoints)
-6. [Testing Lengkap](#-testing-lengkap)
-7. [Troubleshooting](#-troubleshooting)
-8. [Arsitektur](#-arsitektur)
-
----
-
 ## ✨ Fitur-Fitur
 
 ### **Core Features:**
