@@ -3,9 +3,10 @@ package command
 import (
 	"context"
 	"user-crud/internal/domain"
+	"user-crud/internal/infrastructure/cache"
+	"user-crud/internal/infrastructure/tracing"
 )
 
-// CreateUserCommand represents the command to create a user
 type CreateUserCommand struct {
 	Name     string `json:"name" binding:"required"`
 	Email    string `json:"email" binding:"required,email"`
@@ -13,31 +14,29 @@ type CreateUserCommand struct {
 	Age      int    `json:"age" binding:"required,min=0,max=150"`
 }
 
-// CreateUserHandler handles user creation
 type CreateUserHandler struct {
-	repo domain.UserRepository
+	repo  domain.UserRepository
+	cache *cache.RedisCache
 }
 
-// NewCreateUserHandler creates a new CreateUserHandler
-func NewCreateUserHandler(repo domain.UserRepository) *CreateUserHandler {
-	return &CreateUserHandler{repo: repo}
+func NewCreateUserHandler(repo domain.UserRepository, cache *cache.RedisCache) *CreateUserHandler {
+	return &CreateUserHandler{repo: repo, cache: cache}
 }
 
-// Handle executes the create user command
 func (h *CreateUserHandler) Handle(ctx context.Context, cmd CreateUserCommand) (*domain.User, error) {
-	// Check if user already exists
+	ctx, span := tracing.StartSpan(ctx, "CreateUserHandler.Handle")
+	defer span.End()
+
 	existingUser, _ := h.repo.GetByEmail(ctx, cmd.Email)
 	if existingUser != nil {
 		return nil, domain.ErrUserAlreadyExists
 	}
 
-	// Create new user domain entity (with password hashing)
 	user, err := domain.NewUser(cmd.Name, cmd.Email, cmd.Password, cmd.Age)
 	if err != nil {
 		return nil, err
 	}
 
-	// Persist to repository
 	if err := h.repo.Create(ctx, user); err != nil {
 		return nil, err
 	}

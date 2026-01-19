@@ -13,9 +13,11 @@ import (
 	"user-crud/internal/application/command"
 	"user-crud/internal/application/query"
 	"user-crud/internal/config"
+	"user-crud/internal/infrastructure/cache"
 	"user-crud/internal/infrastructure/http/handler"
 	"user-crud/internal/infrastructure/http/router"
 	"user-crud/internal/infrastructure/persistence"
+	"user-crud/internal/infrastructure/tracing"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -23,6 +25,16 @@ import (
 func main() {
 	// Load configuration
 	cfg := config.Load()
+
+	// Initialize Jaeger tracing
+	jaegerEndpoint := getEnv("JAEGER_ENDPOINT", "http://jaeger:14268/api/traces")
+	shutdown, err := tracing.InitTracer("user-crud-service", jaegerEndpoint)
+	if err != nil {
+		log.Printf("Warning: Failed to initialize tracer: %v", err)
+	} else {
+		defer shutdown(context.Background())
+		log.Println("Jaeger tracing initialized successfully")
+	}
 
 	// Initialize database connection
 	dbpool, err := initDatabase(cfg)
@@ -36,17 +48,27 @@ func main() {
 		log.Fatalf("Failed to run migrations: %v", err)
 	}
 
+	// Initialize Redis cache
+	redisHost := getEnv("REDIS_HOST", "localhost")
+	redisPort := getEnv("REDIS_PORT", "6379")
+	redisCache, err := cache.NewRedisCache(redisHost, redisPort, 5*time.Minute)
+	if err != nil {
+		log.Fatalf("Failed to initialize Redis: %v", err)
+	}
+	defer redisCache.Close()
+	log.Println("Successfully connected to Redis")
+
 	// Initialize repository
 	userRepo := persistence.NewPostgresUserRepository(dbpool)
 
-	// Initialize command handlers
-	createUserHandler := command.NewCreateUserHandler(userRepo)
-	updateUserHandler := command.NewUpdateUserHandler(userRepo)
-	deleteUserHandler := command.NewDeleteUserHandler(userRepo)
-	changePasswordHandler := command.NewChangePasswordHandler(userRepo)
+	// Initialize command handlers (WITH CACHE)
+	createUserHandler := command.NewCreateUserHandler(userRepo, redisCache)
+	updateUserHandler := command.NewUpdateUserHandler(userRepo, redisCache)
+	deleteUserHandler := command.NewDeleteUserHandler(userRepo, redisCache)
+	changePasswordHandler := command.NewChangePasswordHandler(userRepo, redisCache)
 
-	// Initialize query handlers
-	getUserHandler := query.NewGetUserHandler(userRepo)
+	// Initialize query handlers (WITH CACHE)
+	getUserHandler := query.NewGetUserHandler(userRepo, redisCache)
 	listUsersHandler := query.NewListUsersHandler(userRepo)
 	searchUsersHandler := query.NewSearchUsersHandler(userRepo)
 
@@ -60,6 +82,7 @@ func main() {
 		listUsersHandler,
 		searchUsersHandler,
 		dbpool,
+		redisCache,
 	)
 
 	// Setup router
@@ -67,8 +90,11 @@ func main() {
 
 	// Create HTTP server
 	srv := &http.Server{
-		Addr:    fmt.Sprintf(":%s", cfg.ServerPort),
-		Handler: r,
+		Addr:         fmt.Sprintf(":%s", cfg.ServerPort),
+		Handler:      r,
+		ReadTimeout:  15 * time.Second,
+		WriteTimeout: 15 * time.Second,
+		IdleTimeout:  60 * time.Second,
 	}
 
 	// Start server in goroutine
@@ -114,7 +140,6 @@ func initDatabase(cfg *config.Config) (*pgxpool.Pool, error) {
 	config.MaxConns = 10
 	config.MinConns = 2
 
-	// Retry connection with exponential backoff
 	var dbpool *pgxpool.Pool
 	maxRetries := 5
 	for i := 0; i < maxRetries; i++ {
@@ -161,4 +186,12 @@ func runMigrations(dbpool *pgxpool.Pool) error {
 
 	log.Println("Migrations completed successfully")
 	return nil
+}
+
+// getEnv gets environment variable with default value
+func getEnv(key, defaultValue string) string {
+	if value := os.Getenv(key); value != "" {
+		return value
+	}
+	return defaultValue
 }
