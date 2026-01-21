@@ -1,3 +1,9 @@
+// @title User CRUD API
+// @version 2.0
+// @description REST API untuk manajemen user
+// @host localhost:8080
+// @BasePath /api/v1
+// @schemes http
 package main
 
 import (
@@ -18,6 +24,8 @@ import (
 	"user-crud/internal/infrastructure/http/router"
 	"user-crud/internal/infrastructure/persistence"
 	"user-crud/internal/infrastructure/tracing"
+
+	_ "user-crud/docs"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 )

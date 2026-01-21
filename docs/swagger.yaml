@@ -1,3 +1,4 @@
+basePath: /api/v1
 definitions:
   command.ChangePasswordCommand:
     properties:
@@ -44,8 +45,12 @@ definitions:
     - email
     - name
     type: object
+host: localhost:8080
 info:
   contact: {}
+  description: REST API untuk manajemen user
+  title: User CRUD API
+  version: "2.0"
 paths:
   /health:
     get:
@@ -367,4 +372,6 @@ paths:
       summary: Search users
       tags:
       - users
+schemes:
+- http
 swagger: "2.0"

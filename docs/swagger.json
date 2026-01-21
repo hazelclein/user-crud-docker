@@ -1,8 +1,16 @@
 {
+    "schemes": [
+        "http"
+    ],
     "swagger": "2.0",
     "info": {
-        "contact": {}
+        "description": "REST API untuk manajemen user",
+        "title": "User CRUD API",
+        "contact": {},
+        "version": "2.0"
     },
+    "host": "localhost:8080",
+    "basePath": "/api/v1",
     "paths": {
         "/health": {
             "get": {
